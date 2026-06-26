@@ -1,0 +1,484 @@
+<!--
+  Label Designer
+  Offline, single-file label design tool (Fabric.js + JsBarcode + qrcode).
+  Author: Jhon Lee Quint
+  See README.md for usage, limitations and third-party notices.
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerador de Etiquetas</title>
+    
+    <script src="./vendor/fabric.min.js"></script>
+    <script src="./vendor/JsBarcode.all.min.js"></script>
+    <script src="./vendor/qrcode.min.js"></script>
+    
+    <style>
+        body { font-family: 'Microsoft YaHei', 'SimSun', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        
+        .header-container { width: 100%; max-width: 900px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px; }
+        
+        h1 { color: #333; margin: 0; font-size: 26px; }
+        .author { color: #666; font-size: 14px; font-weight: bold; margin-top: 5px; margin-bottom: 20px; text-align: left; width: 100%; max-width: 900px;}
+        
+        .toolbar { 
+            background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+            margin-bottom: 20px; display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; max-width: 1100px;
+            align-items: center; position: sticky; top: 0; z-index: 100;
+        }
+        
+        .toolbar-group {
+            display: flex; gap: 5px; align-items: center; border: 1px solid #ddd; padding: 5px 10px; border-radius: 5px; background: #fafafa;
+        }
+
+        button { padding: 8px 12px; border: none; background: #0056b3; color: white; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; font-size: 13px;}
+        button:hover { background: #004494; }
+        button.danger { background: #dc3545; }
+        button.danger:hover { background: #c82333; }
+        button.success { background: #28a745; }
+        button.success:hover { background: #218838; }
+        button.secondary { background: #6c757d; }
+        button.secondary:hover { background: #5a6268; }
+        button.warning { background: #ff9800; color: #fff; }
+        button.warning:hover { background: #e68a00; }
+        button.info { background: #17a2b8; color: #fff; }
+        button.info:hover { background: #138496; }
+
+        input[type="number"], select { padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-family: 'Microsoft YaHei', sans-serif;}
+        
+        .workspace {
+            display: flex; justify-content: center; padding: 20px; background: transparent;
+        }
+
+        .canvas-container { background: white; box-shadow: 0 4px 15px rgba(0,0,0,0.2); border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <h1 data-i18n="title">Gerador de Etiquetas</h1>
+        <select id="langSelect" onchange="changeLanguage()" style="font-weight: bold; background: #0056b3; color: white; border: none;">
+            <option value="pt-BR">🇧🇷 PT-BR</option>
+            <option value="en-US">🇺🇸 EN-US</option>
+            <option value="zh-CN">🇨🇳 ZH-CN (中文)</option>
+        </select>
+    </div>
+    
+    <p class="author" data-i18n="author">Desenvolvido por: Jhon Lee Quint</p>
+
+    <div class="toolbar">
+        <div class="toolbar-group">
+            <label data-i18n="size" style="font-size: 13px; font-weight: bold;">Tamanho (mm):</label>
+            <input type="number" id="labelWidth" value="100" style="width: 55px;">
+            <span>x</span>
+            <input type="number" id="labelHeight" value="150" style="width: 55px;">
+            <button class="secondary" onclick="resizeCanvas()" data-i18n="apply">Aplicar</button>
+        </div>
+
+        <div class="toolbar-group">
+            <button onclick="addText()" data-i18n="add_text">+ Texto</button>
+            <button onclick="addRect()" data-i18n="add_shape">+ Forma</button>
+            <input type="file" id="imageUpload" accept="image/png, image/jpeg" style="display: none;" onchange="importImage(event)" />
+            <button onclick="document.getElementById('imageUpload').click()" data-i18n="add_image">+ Logo / Imagem</button>
+        </div>
+
+        <div class="toolbar-group">
+            <select id="barcodeFormat">
+                <option value="CODE128" selected>CODE-128 (Alfanumérico)</option>
+                <option value="CODE39">CODE-39</option>
+                <option value="EAN13">EAN-13 (Apenas Números)</option>
+                <option value="EAN8">EAN-8</option>
+                <option value="EAN5">EAN-5</option>
+                <option value="EAN2">EAN-2</option>
+                <option value="UPC">UPC</option>
+                <option value="ITF14">ITF-14</option>
+                <option value="MSI">MSI</option>
+                <option value="pharmacode">Pharmacode</option>
+            </select>
+            <button onclick="addBarcode()" data-i18n="add_barcode">+ Barras</button>
+            <button onclick="addQRCode()" data-i18n="add_qrcode">+ QR Code</button>
+        </div>
+
+        <div class="toolbar-group" style="border: none;">
+            <button class="danger" onclick="deleteSelected()" data-i18n="del">🗑️</button>
+            <button class="success" onclick="exportLabel()" data-i18n="save">💾 PNG</button>
+            <button class="secondary" onclick="exportLab()" data-i18n="export_lab">💾 .Lab</button>
+
+            <button class="info" onclick="printStandard()" data-i18n="print_std">🖨️ IMPRESSORA COMUM (Rede)</button>
+            <button class="warning" onclick="printWebUSB()" data-i18n="print">🖨️ ZEBRA (WebUSB)</button>
+        </div>
+    </div>
+
+    <canvas id="barcodeCanvas" style="display:none;"></canvas>
+
+    <div class="workspace">
+        <canvas id="labelCanvas"></canvas>
+    </div>
+
+    <script>
+        // -------------------------------------------------------------
+        // TRANSLATION DICTIONARY (pt-BR, en-US, zh-CN)
+        // -------------------------------------------------------------
+        const translations = {
+            "pt-BR": {
+                "title": "Gerador de Etiquetas",
+                "author": "Desenvolvido por: Jhon Lee Quint",
+                "size": "Tamanho (mm):",
+                "apply": "Aplicar",
+                "add_text": "+ Texto",
+                "add_shape": "+ Forma",
+                "add_image": "+ Logo / Imagem",
+                "add_barcode": "+ Barras",
+                "add_qrcode": "+ QR Code",
+                "del": "🗑️",
+                "save": "💾 PNG",
+                "export_lab": "💾 .Lab",
+                "print_std": "🖨️ IMPRESSORA COMUM (Rede)",
+                "print": "🖨️ ZEBRA (WebUSB)",
+                "default_text": "Clique para editar",
+                "prompt_barcode": "Digite o valor para ",
+                "prompt_qr": "Digite o texto do QR Code:",
+                "err_usb": "O seu navegador não suporta WebUSB.",
+                "msg_usb_ok": "✅ Comando enviado com sucesso!",
+                "msg_usb_err": "❌ Não encontrei a porta de saída USB."
+            },
+            "en-US": {
+                "title": "Label Generator",
+                "author": "Developed by: Jhon Lee Quint",
+                "size": "Size (mm):",
+                "apply": "Apply",
+                "add_text": "+ Text",
+                "add_shape": "+ Shape",
+                "add_image": "+ Logo / Image",
+                "add_barcode": "+ Barcode",
+                "add_qrcode": "+ QR Code",
+                "del": "🗑️",
+                "save": "💾 PNG",
+                "export_lab": "💾 .Lab",
+                "print_std": "🖨️ STANDARD PRINTER (Network)",
+                "print": "🖨️ ZEBRA (WebUSB)",
+                "default_text": "Click to edit",
+                "prompt_barcode": "Enter value for ",
+                "prompt_qr": "Enter QR Code text:",
+                "err_usb": "Your browser does not support WebUSB.",
+                "msg_usb_ok": "✅ Print command sent successfully!",
+                "msg_usb_err": "❌ USB out endpoint not found."
+            },
+            "zh-CN": {
+                "title": "标签生成器",
+                "author": "开发由: Jhon Lee Quint",
+                "size": "尺寸 (毫米):",
+                "apply": "应用",
+                "add_text": "+ 文本",
+                "add_shape": "+ 形状",
+                "add_image": "+ 标志 / 图像",
+                "add_barcode": "+ 条形码",
+                "add_qrcode": "+ 二维码",
+                "del": "🗑️",
+                "save": "💾 PNG",
+                "export_lab": "💾 .Lab",
+                "print_std": "🖨️ 普通打印机 (网络)",
+                "print": "🖨️ ZEBRA (WebUSB)",
+                "default_text": "点击编辑",
+                "prompt_barcode": "输入值 ",
+                "prompt_qr": "输入二维码文本：",
+                "err_usb": "您的浏览器不支持 WebUSB。",
+                "msg_usb_ok": "✅ 打印命令已成功发送！",
+                "msg_usb_err": "❌ 未找到 USB 输出端点。"
+            }
+        };
+
+        let currentLang = "pt-BR";
+
+        function changeLanguage() {
+            currentLang = document.getElementById('langSelect').value;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (translations[currentLang][key]) {
+                    el.innerText = translations[currentLang][key];
+                }
+            });
+            document.title = translations[currentLang]["title"];
+        }
+
+        function getTranslation(key) {
+            return translations[currentLang][key];
+        }
+
+        // -------------------------------------------------------------
+        // DRAWING ENGINE (FABRIC.JS) AT 203 DPI RESOLUTION
+        // -------------------------------------------------------------
+        const canvas = new fabric.Canvas('labelCanvas', { backgroundColor: 'white' });
+        const pixelsPerMM = 8; 
+        const visualScaleMM = 4; 
+
+        resizeCanvas();
+
+        function resizeCanvas() {
+            const w = document.getElementById('labelWidth').value;
+            const h = document.getElementById('labelHeight').value;
+            if(w > 0 && h > 0) {
+                canvas.setDimensions({ width: w * pixelsPerMM, height: h * pixelsPerMM });
+                canvas.setDimensions({ width: (w * visualScaleMM) + 'px', height: (h * visualScaleMM) + 'px' }, { cssOnly: true });
+                canvas.renderAll();
+            }
+        }
+
+        function addText() {
+            const text = new fabric.Textbox(getTranslation("default_text"), { 
+                left: 40, top: 40, width: 400,
+                fontFamily: '"Microsoft YaHei", "SimSun", Arial, sans-serif', 
+                fill: '#000', fontSize: 48,
+                splitByGrapheme: true
+            });
+            canvas.add(text); canvas.setActiveObject(text);
+        }
+
+        function addRect() {
+            const rect = new fabric.Rect({ left: 100, top: 100, fill: 'transparent', stroke: 'black', strokeWidth: 4, width: 400, height: 200 });
+            canvas.add(rect); canvas.setActiveObject(rect);
+        }
+
+        function importImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(f) {
+                fabric.Image.fromURL(f.target.result, function(img) {
+                    img.set({ left: 40, top: 40 });
+                    if (img.width > 400) img.scaleToWidth(400); 
+                    canvas.add(img); canvas.setActiveObject(img);
+                });
+            };
+            reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        function addBarcode() {
+            const formatType = document.getElementById('barcodeFormat').value;
+            let defaultVal = "1234567890";
+            if (formatType === 'CODE128' || formatType === 'CODE39') defaultVal = "A1B2C3D4E5F6"; 
+            if (formatType === 'EAN13') defaultVal = "789123456789";
+            if (formatType === 'EAN8') defaultVal = "1234567";
+            if (formatType === 'EAN5') defaultVal = "12345";
+            if (formatType === 'EAN2') defaultVal = "12";
+            if (formatType === 'UPC') defaultVal = "12345678901";
+
+            let barcodeValue = prompt(getTranslation("prompt_barcode") + formatType + ":", defaultVal);
+            if (!barcodeValue) return;
+
+            const hiddenCanvas = document.getElementById('barcodeCanvas');
+            try {
+                JsBarcode(hiddenCanvas, barcodeValue, { format: formatType, displayValue: true, fontSize: 40, margin: 0, width: 4, height: 160 });
+                fabric.Image.fromURL(hiddenCanvas.toDataURL(), function(img) {
+                    img.set({ left: 100, top: 100 });
+                    canvas.add(img); canvas.setActiveObject(img);
+                });
+            } catch (error) {
+                alert(`Erro! O padrão ${formatType} recusou esse valor. Lembre-se: Códigos como EAN e UPC aceitam SOMENTE números. Se precisa de letras (como MAC Address e Serial), use CODE-128.`);
+            }
+        }
+
+        function addQRCode() {
+            let qrValue = prompt(getTranslation("prompt_qr"));
+            if (!qrValue) return;
+            QRCode.toDataURL(qrValue, { width: 400, margin: 1 }, function (err, url) {
+                if (err) return;
+                fabric.Image.fromURL(url, function(img) {
+                    img.set({ left: 100, top: 100 });
+                    canvas.add(img); canvas.setActiveObject(img);
+                });
+            });
+        }
+
+        function deleteSelected() {
+            const activeObjects = canvas.getActiveObjects();
+            if (activeObjects.length) {
+                canvas.discardActiveObject();
+                activeObjects.forEach(obj => canvas.remove(obj));
+            }
+        }
+
+        function exportLabel() {
+            canvas.discardActiveObject(); canvas.renderAll();
+            const dataURL = canvas.toDataURL({ format: 'png', quality: 1 });
+            const w = document.getElementById('labelWidth').value;
+            const h = document.getElementById('labelHeight').value;
+            const link = document.createElement('a');
+            link.download = `Etiqueta_${w}x${h}mm.png`;
+            link.href = dataURL;
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+        }
+
+        function exportLab() {
+            canvas.discardActiveObject(); 
+            canvas.renderAll();
+            
+            const w = document.getElementById('labelWidth').value;
+            const h = document.getElementById('labelHeight').value;
+            
+            const labData = { width: w, height: h, canvasJson: canvas.toJSON() };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(labData));
+            const link = document.createElement('a');
+            link.download = `ProjetoEtiqueta_${w}x${h}mm.lab`;
+            link.href = dataStr;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function printStandard() {
+            canvas.discardActiveObject(); 
+            canvas.renderAll();
+            const dataUrl = canvas.toDataURL({ format: 'png', quality: 1 });
+            
+            const printWin = window.open('', '', 'width=800,height=600');
+            printWin.document.write(`
+                <html>
+                <head>
+                    <title>Imprimir Etiqueta</title>
+                    <style>
+                        body { margin: 0; display: flex; justify-content: center; align-items: center; background: white; }
+                        img { max-width: 100%; height: auto; }
+                        @media print { @page { margin: 0; } body { margin: 1cm; } }
+                    </style>
+                </head>
+                <body>
+                    <img src="${dataUrl}" />
+                </body>
+                </html>
+            `);
+            printWin.document.close();
+            printWin.focus();
+            
+            setTimeout(() => { printWin.print(); printWin.close(); }, 500); 
+        }
+
+        window.addEventListener('keydown', function(e) {
+            if ((e.key === 'Delete' || e.key === 'Backspace') && !(canvas.getActiveObject() && canvas.getActiveObject().isEditing)) {
+                deleteSelected();
+            }
+        });
+
+        // -------------------------------------------------------------
+        // CANVAS -> ZPL CONVERTER AND WEBUSB COMMUNICATION (ZEBRA)
+        // WITH FLOYD-STEINBERG DITHERING FOR COLOR LOGOS/PHOTOS
+        // -------------------------------------------------------------
+        async function printWebUSB() {
+            if (!navigator.usb) {
+                alert(getTranslation("err_usb"));
+                return;
+            }
+
+            try {
+                canvas.discardActiveObject(); 
+                canvas.renderAll();
+                
+                const ctx = canvas.getContext('2d');
+                const width = canvas.getWidth();
+                const height = canvas.getHeight();
+                const imgData = ctx.getImageData(0, 0, width, height).data;
+
+                // 1. Extract plain grayscale
+                let grayscale = new Uint8Array(width * height);
+                for (let i = 0; i < width * height; i++) {
+                    const idx = i * 4;
+                    const r = imgData[idx], g = imgData[idx+1], b = imgData[idx+2], a = imgData[idx+3];
+                    if (a < 128) {
+                        grayscale[i] = 255; 
+                    } else {
+                        grayscale[i] = (0.299*r + 0.587*g + 0.114*b);
+                    }
+                }
+
+                // 2. Apply the Floyd-Steinberg dithering algorithm
+                let dithered = new Uint8Array(width * height);
+                let errorBuffer = new Float32Array(width * height);
+                for (let i = 0; i < width * height; i++) {
+                    errorBuffer[i] = grayscale[i]; 
+                }
+
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const i = y * width + x;
+                        const oldPixel = errorBuffer[i];
+                        const newPixel = oldPixel < 128 ? 0 : 255; 
+                        dithered[i] = newPixel;
+                        
+                        const quantError = oldPixel - newPixel;
+                        
+                        if (x + 1 < width) errorBuffer[i + 1] += quantError * (7 / 16);
+                        if (y + 1 < height) {
+                            if (x - 1 >= 0) errorBuffer[i + width - 1] += quantError * (3 / 16);
+                            errorBuffer[i + width] += quantError * (5 / 16);
+                            if (x + 1 < width) errorBuffer[i + width + 1] += quantError * (1 / 16);
+                        }
+                    }
+                }
+
+                // 3. Pack the dithered result into hexadecimal bytes for ZPL
+                const bytesPerRow = Math.ceil(width / 8);
+                const totalBytes = bytesPerRow * height;
+                let zplHex = "";
+
+                for (let y = 0; y < height; y++) {
+                    let rowByte = 0;
+                    for (let x = 0; x < width; x++) {
+                        const isBlack = dithered[y * width + x] < 128 ? 1 : 0;
+                        rowByte = (rowByte << 1) | isBlack;
+                        
+                        if ((x + 1) % 8 === 0 || x === width - 1) {
+                            if (x === width - 1 && (x + 1) % 8 !== 0) {
+                                rowByte = rowByte << (8 - ((x + 1) % 8));
+                            }
+                            let hex = rowByte.toString(16).toUpperCase();
+                            if (hex.length < 2) hex = "0" + hex;
+                            zplHex += hex;
+                            rowByte = 0; 
+                        }
+                    }
+                    zplHex += "\r\n"; 
+                }
+
+                const zplCommand = `^XA\r\n^FO0,0^GFA,${totalBytes},${totalBytes},${bytesPerRow},\r\n${zplHex}^FS\r\n^XZ`;
+
+                // 4. Send over USB
+                let device;
+                try {
+                    device = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x0A5F }] });
+                } catch(e) {
+                    device = await navigator.usb.requestDevice({ filters: [] }); 
+                }
+
+                await device.open();
+                
+                if (device.configuration === null) {
+                    await device.selectConfiguration(1);
+                }
+                
+                let printInterface = device.configuration.interfaces.find(c => c.alternate.interfaceClass === 7) || device.configuration.interfaces[0];
+                await device.claimInterface(printInterface.interfaceNumber);
+
+                let outEndpoint = printInterface.alternate.endpoints.find(e => e.direction === 'out');
+
+                if (outEndpoint) {
+                    const encoder = new TextEncoder();
+                    await device.transferOut(outEndpoint.endpointNumber, encoder.encode(zplCommand));
+                    alert(getTranslation("msg_usb_ok"));
+                } else {
+                    alert(getTranslation("msg_usb_err"));
+                }
+                
+                await device.close();
+
+            } catch (error) {
+                console.error(error);
+                if (error.name !== 'NotFoundError') {
+                    alert("Error: " + error.message);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
