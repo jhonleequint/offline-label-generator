@@ -1,0 +1,12 @@
+# Cleanup quarantine (local only)
+.cleanup-backup-*/
+
+# Exported artifacts
+*.lab
+*.png
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
