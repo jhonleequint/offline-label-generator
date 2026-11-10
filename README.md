@@ -1,4 +1,4 @@
-# Label Designer
+# Offline Label Generator
 
 Offline, single-file label design tool for industrial labels. Compose a layout
 with text, shapes, images, barcodes and QR codes, then export it as PNG or
@@ -6,6 +6,8 @@ with text, shapes, images, barcodes and QR codes, then export it as PNG or
 thermal printer over USB (ZPL via WebUSB).
 
 Author: Jhon Lee Quint
+
+![Offline Label Generator](docs/screenshot.png)
 
 The interface is available in Brazilian Portuguese (default), English and
 Simplified Chinese; use the language selector in the top-right corner.

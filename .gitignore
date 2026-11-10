@@ -4,6 +4,7 @@
 # Exported artifacts
 *.lab
 *.png
+!docs/*.png
 
 # OS / editor
 Thumbs.db
